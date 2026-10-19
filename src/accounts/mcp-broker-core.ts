@@ -29,7 +29,7 @@ export interface BrokerCredentials {
   password?: string;
   privateKey?: string;
 }
-type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'MCP_BROKER_TOKEN' | 'MCP_BROKER_HOST_IDS'>;
+type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'MCP_BROKER_TOKEN'>;
 interface HostRow { id: string; account_id: string; encrypted_payload: string }
 
 function denied(): BrokerReply<never> { return { ok: false, error: 'broker_forbidden' }; }
@@ -47,12 +47,10 @@ async function equalTokens(a: string, b: string): Promise<boolean> {
   for (let i = 0; i < left.length; i++) mismatch |= left[i]! ^ right[i]!;
   return mismatch === 0;
 }
-async function allow(env: BrokerEnv, token: unknown): Promise<Set<string> | null> {
-  if (typeof token !== 'string'
-      || !env.MCP_BROKER_TOKEN || !(await equalTokens(token, env.MCP_BROKER_TOKEN))) return null;
-  const ids = (env.MCP_BROKER_HOST_IDS ?? '').split(',').map(id => id.trim().toLowerCase());
-  if (ids.length === 0 || ids.some(id => !isHostId(id))) return null;
-  return new Set(ids);
+async function authorized(env: BrokerEnv, token: unknown): Promise<boolean> {
+  return typeof token === 'string'
+    && typeof env.MCP_BROKER_TOKEN === 'string'
+    && await equalTokens(token, env.MCP_BROKER_TOKEN);
 }
 async function findHost(env: BrokerEnv, id: string): Promise<HostPayload | null> {
   const workspace = await workspaceState(env);
@@ -91,8 +89,7 @@ function validHost(p: HostPayload): boolean {
 
 /** These functions never use hostsRoute(), because its GET performs D1 location backfills. */
 export async function brokerGetHost(env: BrokerEnv, token: unknown, hostId: unknown): Promise<BrokerReply<BrokerHostView>> {
-  const allowed = await allow(env, token);
-  if (!allowed || !isHostId(hostId) || !allowed.has(hostId.toLowerCase())) return denied();
+  if (!(await authorized(env, token)) || !isHostId(hostId)) return denied();
   try {
     const p = await findHost(env, hostId.toLowerCase());
     return p ? { ok: true, value: metadata(hostId.toLowerCase(), p) } : { ok: false, error: 'host_not_found' };
@@ -100,24 +97,29 @@ export async function brokerGetHost(env: BrokerEnv, token: unknown, hostId: unkn
 }
 export async function brokerListHosts(env: BrokerEnv, token: unknown, cursor?: unknown, limit?: unknown):
   Promise<BrokerReply<{ hosts: BrokerHostView[]; nextCursor: string | null }>> {
-  const allowed = await allow(env, token);
-  if (!allowed || (cursor !== undefined && !isHostId(cursor))
+  if (!(await authorized(env, token))
+    || (cursor !== undefined && !isHostId(cursor))
     || (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 50))) return denied();
-  const ids = [...allowed].sort().filter(id => cursor === undefined || id > String(cursor).toLowerCase());
-  const page = ids.slice(0, (limit as number | undefined ?? 50) + 1);
-  const hosts: BrokerHostView[] = [];
+  const pageSize = (limit as number | undefined) ?? 50;
   try {
-    for (const id of page.slice(0, limit as number | undefined ?? 50)) {
-      const p = await findHost(env, id);
-      if (p) hosts.push(metadata(id, p));
+    const workspace = await workspaceState(env);
+    const result = await env.DB.prepare(
+      'SELECT id, account_id, encrypted_payload FROM hosts WHERE account_id = ? AND id > ? ORDER BY id LIMIT ?',
+    ).bind(workspace.accountId, cursor === undefined ? '' : String(cursor).toLowerCase(), pageSize + 1).all<HostRow>();
+    const rows = result.results ?? [];
+    const hosts: BrokerHostView[] = [];
+    for (const row of rows.slice(0, pageSize)) {
+      if (!isHostId(row.id) || row.account_id !== workspace.accountId || typeof row.encrypted_payload !== 'string') {
+        throw new Error('invalid_host_row');
+      }
+      const payload = await decryptHost<HostPayload>(row.encrypted_payload, env.ENCRYPTION_KEY, workspace.accountId, row.id);
+      hosts.push(metadata(row.id, payload));
     }
-    return { ok: true, value: { hosts, nextCursor: page.length > (limit as number | undefined ?? 50)
-      ? page[(limit as number | undefined ?? 50) - 1]! : null } };
+    return { ok: true, value: { hosts, nextCursor: rows.length > pageSize ? rows[pageSize - 1]!.id : null } };
   } catch { return { ok: false, error: 'broker_unavailable' }; }
 }
 export async function brokerResolveHost(env: BrokerEnv, token: unknown, hostId: unknown): Promise<BrokerReply<BrokerCredentials>> {
-  const allowed = await allow(env, token);
-  if (!allowed || !isHostId(hostId) || !allowed.has(hostId.toLowerCase())) return denied();
+  if (!(await authorized(env, token)) || !isHostId(hostId)) return denied();
   try {
     const p = await findHost(env, hostId.toLowerCase());
     if (!p) return { ok: false, error: 'host_not_found' };

@@ -248,3 +248,27 @@ test('Force Update selects a marked official commit and deploys the same SHA dir
   assert.ok(update.includes('deployment_ref: ${{ needs.update.outputs.target_sha }}'));
   assert.equal(update.includes('npm run deploy'), false);
 });
+
+test('MCP broker host allowlist is empty by default and survives Actions config generation', () => {
+  const disabled = readDeploymentSettings(template, { ...env });
+  assert.equal(disabled.mcpBrokerHostIds, '');
+  const generated = createDeploymentConfig(template, disabled, database);
+  assert.equal((generated.vars as Record<string, string>).MCP_BROKER_HOST_IDS, '');
+  assert.equal('MCP_BROKER_TOKEN' in (generated.vars as object), false);
+  const cloudcone = 'df4cb05d-30e9-4436-9948-33c05a26cb79';
+  const enabled = readDeploymentSettings(template, { ...env, MCP_BROKER_HOST_IDS: cloudcone.toUpperCase() });
+  const config = createDeploymentConfig(template, enabled, database);
+  assert.equal((config.vars as Record<string, string>).MCP_BROKER_HOST_IDS, cloudcone);
+  assert.equal('MCP_BROKER_TOKEN' in (config.vars as object), false);
+});
+
+test('invalid or unrestricted broker config stops deployment before provisioning', () => {
+  const cloudcone = 'df4cb05d-30e9-4436-9948-33c05a26cb79';
+  for (const options of [
+    { MCP_BROKER_HOST_IDS: 'all' },
+    { MCP_BROKER_HOST_IDS: cloudcone + ',' + cloudcone },
+    { MCP_BROKER_HOST_IDS: cloudcone + ',' },
+  ]) {
+    assert.throws(() => readDeploymentSettings(template, { ...env, ...options }), /MCP_BROKER/);
+  }
+});

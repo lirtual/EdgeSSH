@@ -12,6 +12,7 @@ import { locateHost } from './accounts/location';
 import { forwardingRoute, trustedForwardRoute } from './forwarding/routes';
 
 export { SSHSessionDO };
+export { HostBrokerEntrypoint } from './accounts/mcp-broker';
 
 function clientAddress(request: Request): string {
   const value = request.headers.get('CF-Connecting-IP') ?? 'local';

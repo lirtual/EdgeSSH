@@ -51,7 +51,6 @@ export interface Env {
   DB: D1Database;
   ENCRYPTION_KEY: string;
   MCP_BROKER_TOKEN?: string;
-  MCP_BROKER_HOST_IDS?: string;
   AUTH_PROVIDER?: string;
   APP_ORIGIN?: string;
   PREVIEW_ORIGIN?: string;

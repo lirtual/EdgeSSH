@@ -16,15 +16,14 @@ const host = {
   initialCommand: '', termType: 'xterm', encoding: 'utf-8', location: null,
 } as const;
 
-async function fixture(options: { enabled?: string; allow?: string; credential?: string; pinned?: string } = {}) {
+async function fixture(options: { allow?: string; credential?: string; pinned?: string; callerToken?: string } = {}) {
   const payload = { ...host, password: options.credential ?? host.password, fingerprint: options.pinned ?? host.fingerprint };
   const ciphertext = await encryptHost(payload, key, owner, cloudcone);
   const rows: Record<string, unknown>[] = [];
   const statements: string[] = [];
   const env = {
-    MCP_BROKER_ENABLED: options.enabled ?? 'true',
     MCP_BROKER_HOST_IDS: options.allow ?? cloudcone,
-    MCP_BROKER_TOKEN: token,
+    MCP_BROKER_TOKEN: options.callerToken ?? token,
     ENCRYPTION_KEY: key,
     DB: {
       prepare(sql: string) {
@@ -48,8 +47,8 @@ async function fixture(options: { enabled?: string; allow?: string; credential?:
   return { env, statements, rows };
 }
 
-test('default-disabled and incorrect caller token fail before ANY D1 read', async () => {
-  const f = await fixture({ enabled: 'false' });
+test('missing or incorrect caller token fails before ANY D1 read', async () => {
+  const f = await fixture({ callerToken: '' });
   assert.deepEqual(await brokerGetHost(f.env, token, cloudcone), { ok: false, error: 'broker_forbidden' });
   const enabled = await fixture();
   assert.deepEqual(await brokerResolveHost(enabled.env, 'wrong-token', cloudcone), { ok: false, error: 'broker_forbidden' });

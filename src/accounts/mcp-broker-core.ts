@@ -29,7 +29,7 @@ export interface BrokerCredentials {
   password?: string;
   privateKey?: string;
 }
-type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'MCP_BROKER_ENABLED' | 'MCP_BROKER_TOKEN' | 'MCP_BROKER_HOST_IDS'>;
+type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'MCP_BROKER_TOKEN' | 'MCP_BROKER_HOST_IDS'>;
 interface HostRow { id: string; account_id: string; encrypted_payload: string }
 
 function denied(): BrokerReply<never> { return { ok: false, error: 'broker_forbidden' }; }
@@ -48,7 +48,7 @@ async function equalTokens(a: string, b: string): Promise<boolean> {
   return mismatch === 0;
 }
 async function allow(env: BrokerEnv, token: unknown): Promise<Set<string> | null> {
-  if (env.MCP_BROKER_ENABLED !== 'true' || typeof token !== 'string'
+  if (typeof token !== 'string'
       || !env.MCP_BROKER_TOKEN || !(await equalTokens(token, env.MCP_BROKER_TOKEN))) return null;
   const ids = (env.MCP_BROKER_HOST_IDS ?? '').split(',').map(id => id.trim().toLowerCase());
   if (ids.length === 0 || ids.some(id => !isHostId(id))) return null;

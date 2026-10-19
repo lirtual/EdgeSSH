@@ -12,6 +12,8 @@ export interface DeploymentSettings {
   customDomain?: string;
   previewDomain?: string;
   deployPreview?: boolean;
+  mcpBrokerEnabled?: boolean;
+  mcpBrokerHostIds?: string;
   authProvider: 'cloudflare' | 'github';
   githubClientId?: string;
   githubAdmin?: string;
@@ -43,6 +45,18 @@ export function readDeploymentSettings(
   const deployPreviewValue = env.DEPLOY_PREVIEW_WORKER?.trim().toLowerCase() || 'false';
   if (deployPreviewValue !== 'true' && deployPreviewValue !== 'false') throw new Error('DEPLOY_PREVIEW_WORKER 只能是 true 或 false。');
   const deployPreview = deployPreviewValue === 'true';
+  // Broker is disabled unless explicitly configured in GitHub Actions Variables.
+  const brokerFlag = env.MCP_BROKER_ENABLED?.trim().toLowerCase() || 'false';
+  if (brokerFlag !== 'true' && brokerFlag !== 'false') throw new Error('MCP_BROKER_ENABLED 必须是 true 或 false。');
+  const mcpBrokerEnabled = brokerFlag === 'true';
+  const rawHostIds = env.MCP_BROKER_HOST_IDS?.trim() || '';
+  const hostIds = rawHostIds ? rawHostIds.split(',').map(id => id.trim().toLowerCase()) : [];
+  if (hostIds.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))
+      || hostIds.length > 50 || new Set(hostIds).size !== hostIds.length) {
+    throw new Error('MCP_BROKER_HOST_IDS 必须是最多 50 个不重复的主机 UUID。');
+  }
+  if (mcpBrokerEnabled && hostIds.length === 0) throw new Error('MCP_BROKER_ENABLED=true 时必须提供 MCP_BROKER_HOST_IDS。');
+  const mcpBrokerHostIds = hostIds.join(',');
   if (deployPreview && `${workerName}-preview`.length > 63) throw new Error('WORKER_NAME 加上 -preview 后不能超过 63 位。');
 
   const databases = template.d1_databases as TomlTable[] | undefined;
@@ -112,7 +126,7 @@ export function readDeploymentSettings(
   return {
     accountId, apiToken: env.CLOUDFLARE_API_TOKEN!.trim(), workerName,
     databaseName, databaseId, customDomain, previewDomain, deployPreview, authProvider, githubClientId, githubAdmin, githubAdminId,
-    adminEmail, identityProviderIds, secrets,
+    adminEmail, identityProviderIds, secrets, mcpBrokerEnabled, mcpBrokerHostIds,
   };
 }
 
@@ -132,6 +146,8 @@ export function createDeploymentConfig(
     vars: {
       ...template.vars as TomlTable,
       AUTH_PROVIDER: settings.authProvider,
+      MCP_BROKER_ENABLED: settings.mcpBrokerEnabled ? 'true' : 'false',
+      MCP_BROKER_HOST_IDS: settings.mcpBrokerHostIds ?? '',
       ...(runtime ? { APP_ORIGIN: `https://${runtime.hostname}` } : {}),
       ...(runtime?.previewOrigin ? { PREVIEW_ORIGIN: runtime.previewOrigin } : {}),
       ...(settings.authProvider === 'github' ? {

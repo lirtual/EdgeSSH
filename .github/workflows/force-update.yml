@@ -61,6 +61,20 @@ jobs:
             exit 0
           fi
 
+          # 新的 SSH MCP Broker 属于 fork 定制；上游强推必须保持该提交。
+          # 自动更新不能无声抹除 Broker，分歧改为人工审核整合。
+          if git cat-file -e "${current_sha}:src/accounts/mcp-broker.ts" 2>/dev/null &&
+             ! git merge-base --is-ancestor "${current_sha}" "${target_sha}"; then
+            echo "updated=false" >> "${GITHUB_OUTPUT}"
+            {
+              echo "## Force Update — manual broker reconciliation required"
+              echo
+              echo "Skipped upstream \`${target_sha}\`: it does not contain the fork broker commit \`${current_sha}\`."
+              echo "Review and integrate upstream security updates manually; the broker must not be silently removed."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
           # lease 保证检测期间 main 若被人工更新则停止，不覆盖刚产生的新提交；下次定时任务会重新计算。
           git push origin "${target_sha}:refs/heads/main" \
             --force-with-lease="refs/heads/main:${current_sha}"

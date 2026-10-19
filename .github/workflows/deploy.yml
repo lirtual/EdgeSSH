@@ -55,7 +55,6 @@ jobs:
       CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN || vars.CUSTOM_DOMAIN }}
       PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
       DEPLOY_PREVIEW_WORKER: ${{ inputs.deploy_preview && 'true' || 'false' }}
-      MCP_BROKER_HOST_IDS: ${{ vars.MCP_BROKER_HOST_IDS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

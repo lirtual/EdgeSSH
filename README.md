@@ -491,6 +491,11 @@ Random Encryption Key
 
 ---
 
+
+### SSH MCP 主机集成
+
+通过具备授权的 Worker Service Binding 和独立的 Broker Token，SSH MCP 会自动读取当前管理员工作区保存的所有主机（分页返回）；新增主机无需重复配置主机 ID。主机列表仅返回脱敏元数据，连接凭据只在经过认证的解析操作中使用，且连接前仍需通过 SSH Host Key 指纹验证。将新主机添加到 EdgeSSH 即同时授权 SSH MCP 管理该主机，请仅保存你希望该 MCP 管理的主机。
+
 ## 当前支持
 
 | 能力 | 支持情况 |

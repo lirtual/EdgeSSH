@@ -42,16 +42,16 @@ Cloudflare 文档支持 Service Binding 指向同账户 Worker 的 **named `Work
 2. `getHostMetadata(brokerToken, hostId)`：返回**一个**允许主机的无凭据视图，用于 MCP `get_host`，不得为元数据请求取出密码或私钥。
 3. `resolveHostForConnection(brokerToken, hostId)`：仅为允许主机的**一次实际 SSH 操作**重新 SELECT、解密、校验并返回 `{id,host,port,username,authMethod,password? / privateKey?, fingerprint}`。不得返回 `ENCRYPTION_KEY`、整行密文、初始命令、用户 Cookie 或其他主机。MCP 端仅在内存中用于当前 SSH 握手，不写 D1、DO、日志或工具输出；完成即关闭连接，不缓存凭据。托管 Shell 每次新输入仍需重新检查主机删除/凭据/指纹变化，不能只信首次解析。
 
-EdgeSSH 使用现有 `workspaceState(env)` 得到固定 `accountId`，`SELECT id, encrypted_payload, updated_at FROM hosts WHERE id=? AND account_id=?`，沿用 `decryptHost` 的 `edgessh:v1:${accountId}:${hostId}` AES-GCM AAD；不加入任何 D1 写语句、表迁移或自动迁移。错误只回传有限枚举 `disabled / forbidden / host_not_found / host_untrusted / unavailable`，拒绝返回密文、内部堆栈、Secret 值。
+EdgeSSH 使用现有 `workspaceState(env)` 得到固定 `accountId`，`SELECT id, encrypted_payload, updated_at FROM hosts WHERE id=? AND account_id=?`，沿用 `decryptHost` 的 `edgessh:v1:${accountId}:${hostId}` AES-GCM AAD；不加入任何 D1 写语句、表迁移或自动迁移。错误只回传有限枚举 `broker_forbidden / host_not_found / host_untrusted / broker_unavailable`，拒绝返回密文、内部堆栈、Secret 值。
 
 ## 必须满足的安全边界
 
-1. **双层启用与最小权限：** EdgeSSH 缺省 `MCP_BROKER_ENABLED=false`，且只有显式允许的主机 ID（首轮仅经批准的 CloudCone）可使用；空白/无效允许列表即全部拒绝。MCP 端独立 Bearer 认证、对首轮 CloudCone 仅允许 `pwd`、`printf`、SFTP 指定只读路径；其他 Shell/SFTP 写入和 PTY 均拒绝。**启用全功能属于另一项发布决定**。
+1. **双层启用与最小权限：** EdgeSSH 仅在独立 `MCP_BROKER_TOKEN` 正确、且主机 ID 位于明确允许列表（首轮仅 CloudCone）时才允许访问；不增加 `MCP_BROKER_ENABLED` 开关；空白/无效允许列表即全部拒绝。MCP 端独立 Bearer 认证、对首轮 CloudCone 仅允许 `pwd`、`printf`、SFTP 指定只读路径；其他 Shell/SFTP 写入和 PTY 均拒绝。**启用全功能属于另一项发布决定**。
 2. **明确调用方授权：** Service Binding 是同 Cloudflare 账户内部能力，而**不是**“只有某个 Worker 能绑定”的不可伪造身份。不能仅依据 Host ID 或自称 caller 名称授权。因此 EdgeSSH 与 MCP Worker 分别持有一个新的、与 `ENCRYPTION_KEY` 完全无关的 `MCP_BROKER_TOKEN`；RPC 每次鉴权并在失败时不解密。专门令牌的安全创建、部署、禁用和轮换需要单独验收，值不写仓库、GitHub 日志或聊天。
 3. **root 凭据的真实风险：** 方案保证**根加密密钥不离开 EdgeSSH**，但 `resolveHostForConnection` 的返回值包含选定主机的 root 密码或 SSH 私钥，**会短暂进入 SSH MCP Worker 的内存**。这是新的敏感信任边界，并不等于“凭据永远不离开 EdgeSSH”。根账号仍具备所有系统权限；上层只读命令白名单限制常规工具调用，不是 root OS 级隔离。上线前必须明确接受该风险，不能声称与 EdgeSSH 原环境等价。
 4. **Host-key pin：** 无已保存有效 SHA256 指纹一律拒绝 SSH；`ssh-keyscan` 的远程候选值不是可信确认来源。原始主机更新、删除、指纹改变之后不得继续接受旧凭据。
 5. **失败关闭、无重试副作用：** Broker 缺失、禁用、RPC/Secret 验证失败、解密失败、D1 读取失败均在 SSH 创建前拒绝；MCP 原有原子回执先于任何有副作用操作；unknown/歧义效果不得自动重新执行。拒绝 RPC 时不能落下实际 SSH 会话。
-6. **禁用无需回滚数据库：** 清除/禁用 Service Binding 或令牌、将 `MCP_BROKER_ENABLED=false` 即阻断新凭据操作；现有已建立的 SSH 会话不能仅凭禁用配置保证实时终止，需按 MCP DO 已有会话生命周期处理。回退 EdgeSSH 代码不会修改主机表、工作区或 Cookie；回退 MCP 不应丢失 unknown 墓碑。
+6. **禁用无需回滚数据库：** 清除允许主机列表、撤销独立令牌或移除 Service Binding，即阻断新凭据操作；现有已建立的 SSH 会话不能仅凭禁用配置保证实时终止，需按 MCP DO 已有会话生命周期处理。回退 EdgeSSH 代码不会修改主机表、工作区或 Cookie；回退 MCP 不应丢失 unknown 墓碑。
 
 ## 实施范围（仅待审批，当前没有任何应用代码变更）
 

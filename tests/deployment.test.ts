@@ -251,7 +251,7 @@ test('Force Update selects a marked official commit and deploys the same SHA dir
 
 test('generated deployment config omits per-host filtering while retaining Broker token secrecy', () => {
   const generated = createDeploymentConfig(template, settings, database);
-  assert.equal('MCP_BROKER_TOKEN' in (generated.vars as object), false);
+  assert.equal('SSH_BROKER_TOKEN' in (generated.vars as object), false);
   assert.deepEqual(generated.d1_databases, [{
     binding: 'DB', database_name: database.name, database_id: database.uuid, migrations_dir: 'migrations',
   }]);

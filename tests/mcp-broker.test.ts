@@ -25,7 +25,7 @@ async function fixture(options: { credential?: string; pinned?: string; callerTo
   ];
   const statements: string[] = [];
   const env = {
-    MCP_BROKER_TOKEN: options.callerToken ?? token,
+    SSH_BROKER_TOKEN: options.callerToken ?? token,
     ENCRYPTION_KEY: key,
     DB: {
       prepare(sql: string) {

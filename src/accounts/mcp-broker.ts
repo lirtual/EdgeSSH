@@ -4,7 +4,7 @@ import { brokerGetHost, brokerListHosts, brokerResolveHost } from './mcp-broker-
 
 /**
  * Named RPC entrypoint, NOT a public fetch route. Requires both a Service
- * Binding and the independent MCP_BROKER_TOKEN; default is disabled.
+ * Binding and the independent SSH_BROKER_TOKEN; default is disabled.
  */
 export class HostBrokerEntrypoint extends WorkerEntrypoint<Env> {
   async listHostMetadata(request: { token: string; cursor?: string; limit?: number }) {

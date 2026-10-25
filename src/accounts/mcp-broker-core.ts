@@ -29,7 +29,7 @@ export interface BrokerCredentials {
   password?: string;
   privateKey?: string;
 }
-type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'MCP_BROKER_TOKEN'>;
+type BrokerEnv = Pick<Env, 'DB' | 'ENCRYPTION_KEY' | 'SSH_BROKER_TOKEN'>;
 interface HostRow { id: string; account_id: string; encrypted_payload: string }
 
 function denied(): BrokerReply<never> { return { ok: false, error: 'broker_forbidden' }; }
@@ -49,8 +49,8 @@ async function equalTokens(a: string, b: string): Promise<boolean> {
 }
 async function authorized(env: BrokerEnv, token: unknown): Promise<boolean> {
   return typeof token === 'string'
-    && typeof env.MCP_BROKER_TOKEN === 'string'
-    && await equalTokens(token, env.MCP_BROKER_TOKEN);
+    && typeof env.SSH_BROKER_TOKEN === 'string'
+    && await equalTokens(token, env.SSH_BROKER_TOKEN);
 }
 async function findHost(env: BrokerEnv, id: string): Promise<HostPayload | null> {
   const workspace = await workspaceState(env);

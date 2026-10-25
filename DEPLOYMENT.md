@@ -204,11 +204,11 @@ EdgeSSH-Auto-Update: true
 
 <a id="worker-runtime-secrets"></a>
 
+## 密钥生命周期与旧版升级
+
 ### SSH MCP Broker Secret 命名迁移
 
 可选的 SSH MCP Broker 使用独立的 `SSH_BROKER_TOKEN` Worker Secret；它必须与 `ssh-mcp-worker` 上的同名 Secret 具有完全相同的值，且至少 32 个字符。旧部署可能仍有 `MCP_BROKER_TOKEN`。Cloudflare 不提供 Secret 明文读回，因此部署新代码前，必须从原始安全记录将同一值保存为 `SSH_BROKER_TOKEN`，并确认两端一致；先保留旧 Secret，直到新版本验收通过，再单独清理。若无法取得原值，须安排两端协调轮换，不可只改一端。普通 EdgeSSH 部署不会自动生成或同步该 Broker Token。
-
-## 密钥生命周期与旧版升级
 
 - `ENCRYPTION_KEY` 的持久化来源是 **Cloudflare Worker Secrets**。Cloudflare 模式自动取得并保存 Team Domain/AUD；GitHub Client Secret 由 GitHub Actions Secret 同步到 Worker。不要保存为 Variable 或明文配置。
 - 新部署不需要 GitHub 写 Secrets 权限或额外 GitHub Token。生成的值不写入文件、命令行参数或 Actions artifact。
